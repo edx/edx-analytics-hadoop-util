@@ -53,6 +53,12 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         FileStatus[] matches = fs.globStatus(globPath);
 
         List<FileStatus> paths = new ArrayList<FileStatus>();
+
+        // fs.globStatus returns null when the path looks like a file and it does not exist.
+        if (matches == null) {
+            return paths;
+        }
+
         for (int i = 0; i < matches.length; i++) {
             FileStatus match = matches[i];
             if (match.isDirectory()) {
