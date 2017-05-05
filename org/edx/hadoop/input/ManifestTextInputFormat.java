@@ -23,8 +23,14 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         List<FileStatus> paths = new ArrayList<FileStatus>();
         for(int i = 0; i < manifests.length; i++) {
             List<Path> globPaths = this.readManifest(manifests[i].getPath(), job);
+
             for (Path globPath : globPaths) {
-                paths.addAll(this.expandPath(globPath, job));
+
+                if (doesFileExist(globPath, job)) {
+                    FileStatus fs = new FileStatus();
+                    fs.setPath(globPath);
+                    paths.add(fs);
+                }
             }
         }
         return paths.toArray(new FileStatus[1]);
@@ -48,30 +54,8 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         return paths;
     }
 
-    private List<FileStatus> expandPath(Path globPath, JobConf conf) throws IOException {
-        FileSystem fs = globPath.getFileSystem(conf);
-        FileStatus[] matches = fs.globStatus(globPath);
-
-        List<FileStatus> paths = new ArrayList<FileStatus>();
-
-        // fs.globStatus returns null when the path looks like a file and it does not exist.
-        if (matches == null) {
-            return paths;
-        }
-
-        for (int i = 0; i < matches.length; i++) {
-            FileStatus match = matches[i];
-            if (match.isDirectory()) {
-                FileStatus[] childStatuses = fs.listStatus(match.getPath());
-                for (int j = 0; j < childStatuses.length; j++) {
-                    paths.add(childStatuses[j]);
-                }
-            } else {
-                paths.add(match);
-            }
-        }
-
-        return paths;
+    private boolean doesFileExist(Path targetPath, JobConf conf) throws IOException {
+        FileSystem fs = targetPath.getFileSystem(conf);
+        return fs.exists(targetPath);
     }
-
 }
