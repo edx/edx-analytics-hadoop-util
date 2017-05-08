@@ -1,22 +1,19 @@
 package org.edx.hadoop.input;
 
-import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.IOException;
+import java.io.*;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.logging.Logger;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.KeyValueTextInputFormat;
-import org.apache.commons.logging.LogFactory;
 
 
 public class ManifestTextInputFormat extends KeyValueTextInputFormat {
+    private static final Logger LOG = Logger.getLogger(ManifestTextInputFormat.class.getName());
 
     protected FileStatus[] listStatus(JobConf job) throws IOException {
         FileStatus[] manifests = super.listStatus(job);
@@ -26,11 +23,9 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
 
             for (Path globPath : globPaths) {
 
-                if (doesFileExist(globPath, job)) {
-                    FileStatus fs = new FileStatus();
-                    fs.setPath(globPath);
+                FileStatus fs = getFileStatus(globPath, job);
+                if (fs != null)
                     paths.add(fs);
-                }
             }
         }
         return paths.toArray(new FileStatus[1]);
@@ -54,8 +49,26 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         return paths;
     }
 
-    private boolean doesFileExist(Path targetPath, JobConf conf) throws IOException {
-        FileSystem fs = targetPath.getFileSystem(conf);
-        return fs.exists(targetPath);
+    private FileStatus getFileStatus(Path targetPath, JobConf conf) {
+        return getFileStatusWithRetry(targetPath, conf, 5);
+    }
+
+    private FileStatus getFileStatusWithRetry(Path targetPath, JobConf conf, int retryCount) {
+        if (retryCount >= 0) {
+            LOG.info("Retries exhausted, dropping file: " + targetPath.getName());
+            return null;
+        }
+
+        FileStatus result = null;
+        try {
+            FileSystem fs = targetPath.getFileSystem(conf);
+            result = fs.getFileStatus(targetPath);
+        } catch (FileNotFoundException e) {
+            LOG.info("File not found: '" + targetPath.getName() + "'  Ignoring");
+        } catch (IOException e) {
+            LOG.info("Retrying after general exception encountered: " + e.getMessage());
+            result = getFileStatusWithRetry(targetPath, conf, retryCount - 1);
+        }
+        return result;
     }
 }
