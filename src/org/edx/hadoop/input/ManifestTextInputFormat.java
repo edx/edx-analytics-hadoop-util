@@ -19,9 +19,9 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
             List<Path> globPaths = this.readManifest(manifests[i].getPath(), job);
             for (Path globPath : globPaths) {
                 if (globPath != null) {
-                    FileStatus fs = getFileStatus(globPath, job);
-                    if (fs != null)
-                        paths.add(fs);
+                    FileStatus fs = new FileStatus();
+                    fs.setPath(globPath);
+                    paths.add(fs);
                 }
             }
         }
@@ -44,28 +44,5 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         }
 
         return paths;
-    }
-
-    private FileStatus getFileStatus(Path targetPath, JobConf conf) {
-        return getFileStatusWithRetry(targetPath, conf, 5);
-    }
-
-    private FileStatus getFileStatusWithRetry(Path targetPath, JobConf conf, int retryCount) {
-        if (retryCount <= 0) {
-            LOG.info("Retries exhausted, dropping file: " + targetPath.toUri());
-            return null;
-        }
-
-        FileStatus result = null;
-        try {
-            FileSystem fs = targetPath.getFileSystem(conf);
-            result = fs.getFileStatus(targetPath);
-        } catch (FileNotFoundException e) {
-            LOG.info("File not found: '" + targetPath.toUri() + "'  Ignoring");
-        } catch (IOException e) {
-            LOG.info("Retrying after general exception encountered: " + e.getMessage());
-            result = getFileStatusWithRetry(targetPath, conf, retryCount - 1);
-        }
-        return result;
     }
 }
