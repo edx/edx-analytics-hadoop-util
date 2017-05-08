@@ -3,7 +3,6 @@ package org.edx.hadoop.input;
 import java.io.*;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.logging.Logger;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -13,19 +12,17 @@ import org.apache.hadoop.mapred.KeyValueTextInputFormat;
 
 
 public class ManifestTextInputFormat extends KeyValueTextInputFormat {
-    private static final Logger LOG = Logger.getLogger(ManifestTextInputFormat.class.getName());
-
     protected FileStatus[] listStatus(JobConf job) throws IOException {
         FileStatus[] manifests = super.listStatus(job);
         List<FileStatus> paths = new ArrayList<FileStatus>();
         for(int i = 0; i < manifests.length; i++) {
             List<Path> globPaths = this.readManifest(manifests[i].getPath(), job);
-
             for (Path globPath : globPaths) {
-
-                FileStatus fs = getFileStatus(globPath, job);
-                if (fs != null)
-                    paths.add(fs);
+                if (globPath != null) {
+                    FileStatus fs = getFileStatus(globPath, job);
+                    if (fs != null)
+                        paths.add(fs);
+                }
             }
         }
         return paths.toArray(new FileStatus[1]);
@@ -54,8 +51,8 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
     }
 
     private FileStatus getFileStatusWithRetry(Path targetPath, JobConf conf, int retryCount) {
-        if (retryCount >= 0) {
-            LOG.info("Retries exhausted, dropping file: " + targetPath.getName());
+        if (retryCount <= 0) {
+            LOG.info("Retries exhausted, dropping file: " + targetPath.toUri());
             return null;
         }
 
@@ -64,7 +61,7 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
             FileSystem fs = targetPath.getFileSystem(conf);
             result = fs.getFileStatus(targetPath);
         } catch (FileNotFoundException e) {
-            LOG.info("File not found: '" + targetPath.getName() + "'  Ignoring");
+            LOG.info("File not found: '" + targetPath.toUri() + "'  Ignoring");
         } catch (IOException e) {
             LOG.info("Retrying after general exception encountered: " + e.getMessage());
             result = getFileStatusWithRetry(targetPath, conf, retryCount - 1);
