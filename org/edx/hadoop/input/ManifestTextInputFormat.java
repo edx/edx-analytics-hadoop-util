@@ -50,7 +50,28 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
 
     private List<FileStatus> expandPath(Path globPath, JobConf conf) throws IOException {
         FileSystem fs = globPath.getFileSystem(conf);
-        FileStatus[] matches = fs.globStatus(globPath);
+        int attempts = 0;
+        boolean success = false;
+        FileStatus[] matches = null;
+        while (!success && attempts < 10) {
+            attempts += 1;
+            try {
+                LOG.info("Fetching file status: " + globPath.toUri());
+                matches = fs.globStatus(globPath);
+                success = true;
+            } catch (Exception exc) {
+                LOG.info("Unable to call globStatus, retrying...", exc);
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("This should never happen");
+                }
+            }
+        }
+
+        if (!success) {
+            throw new RuntimeException("Unable to fetch glob status after several attempts");
+        }
 
         List<FileStatus> paths = new ArrayList<FileStatus>();
 
