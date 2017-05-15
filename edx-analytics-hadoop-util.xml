@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- This is an ANT build file used to compile and generate the jar -->
+<project>
+    <path id="master-classpath">
+        <fileset dir="lib">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+    <target name="clean">
+        <delete dir="build"/>
+    </target>
+    <target name="compile">
+        <antcall target="clean" />
+        <mkdir dir="out/classes"/>
+        <javac srcdir="src" destdir="out/classes" classpathref="master-classpath" />
+    </target>
+    <target name="jar">
+        <antcall target="compile" />
+        <mkdir dir="out/jar"/>
+        <jar destfile="out/jar/edx-analytics-hadoop-util.jar" basedir="out/classes">
+            <manifest>
+            </manifest>
+        </jar>
+    </target>
+</project>
