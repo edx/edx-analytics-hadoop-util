@@ -26,7 +26,7 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
             for(int i = 0; i < globPaths.size(); i++) {
                 Path globPath = globPaths.get(i);
 
-                paths.addAll(this.expandPath(globPath, job));
+                paths.addAll(this.expandPath(globPath, job, false));
 
                 if ((System.currentTimeMillis() - lastReportTime) >= REPORTING_INTERVAL) {
                     lastReportTime = System.currentTimeMillis();
@@ -60,7 +60,7 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         return paths;
     }
 
-    private List<FileStatus> expandPath(Path globPath, JobConf conf) throws IOException {
+    private List<FileStatus> expandPath(Path globPath, JobConf conf, boolean use_list_status) throws IOException {
         FileSystem fs = globPath.getFileSystem(conf);
 
         int attempts = 0;
@@ -69,20 +69,25 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         while (!success && attempts < RETRY_LIMIT) {
             attempts += 1;
             try {
-                matches = fs.globStatus(globPath);
+                // Expand using globStatus at the top level, but recurse below that using listStatus to get children.
+                if (use_list_status) {
+                    matches = fs.listStatus(globPath);
+                } else {
+                    matches = fs.globStatus(globPath);
+                }
                 success = true;
             } catch (Exception exc) {
-                LOG.info("Exception while calling globStatus, retrying...", exc);
+                LOG.info("Exception while getting Status, retrying...", exc);
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    throw new RuntimeException("This should never happen", e);
+                    throw new RuntimeException("Fatal unexpected interruption while retrying ", e);
                 }
             }
         }
 
         if (!success) {
-            throw new RuntimeException("Unable to fetch glob status '" + globPath.toUri() + "' after " + RETRY_LIMIT + " attempts");
+            throw new RuntimeException("Unable to fetch status for '" + globPath.toUri() + "' after " + RETRY_LIMIT + " attempts");
         }
 
         List<FileStatus> paths = new ArrayList<FileStatus>();
@@ -95,10 +100,9 @@ public class ManifestTextInputFormat extends KeyValueTextInputFormat {
         for (int i = 0; i < matches.length; i++) {
             FileStatus match = matches[i];
             if (match.isDirectory()) {
-                FileStatus[] childStatuses = fs.listStatus(match.getPath());
-                for (int j = 0; j < childStatuses.length; j++) {
-                    paths.add(childStatuses[j]);
-                }
+                // Recursively expand directories, using listStatus.
+                paths.addAll(this.expandPath(match.getPath(), conf, true));
+
             } else {
                 paths.add(match);
             }
